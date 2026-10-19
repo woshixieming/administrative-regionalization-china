@@ -55,6 +55,19 @@ def main() -> int:
         n = len(list((DATA / d).iterdir())) if (DATA / d).exists() else 0
         if n < lo:
             ok &= fail(f"{d} 分片仅 {n} 个（期望 ≥{lo}）")
+
+    # 搜索索引：缺失会导致搜索功能静默失效
+    sidx = DATA / "sidx"
+    n_shards = len(list(sidx.iterdir())) if sidx.exists() else 0
+    if n_shards < 100:
+        ok &= fail(f"sidx 分片仅 {n_shards} 个（期望 ≥100）")
+    sidx_top = sidx / "top.json"
+    if not sidx_top.exists():
+        ok &= fail("sidx/top.json 缺失（搜索索引未生成）")
+    else:
+        n = len(json.loads(sidx_top.read_text(encoding="utf-8")))
+        if n < 1000:
+            ok &= fail(f"搜索索引 L1–L3 仅 {n} 条（期望 >1000）")
     if not list(DATA.glob("provinces.json")):
         ok &= fail("provinces.json 缺失")
 

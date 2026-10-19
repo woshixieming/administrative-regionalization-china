@@ -1,4 +1,13 @@
-import { shard, type Area, type City, type Division, type Meta, type Street, type Village } from "./types";
+import {
+  shard,
+  type Area,
+  type City,
+  type Division,
+  type Meta,
+  type SearchEntry,
+  type Street,
+  type Village,
+} from "./types";
 
 const BASE = "/data";
 const cache = new Map<string, Promise<unknown>>();
@@ -53,4 +62,16 @@ export async function loadStreets(areaCode: string): Promise<Street[]> {
 export async function loadVillages(streetCode: string): Promise<Village[]> {
   const g = await get<Record<string, Village[]>>(`l5/${shard(streetCode)}.json`, {});
   return g[streetCode] ?? [];
+}
+
+/** 搜索索引：L1–L3 约 3 千条，单文件常驻 */
+export function loadSearchTop() {
+  return get<SearchEntry[]>("sidx/top.json", []);
+}
+
+/** 搜索索引：L4–L5 按名称首字分片，取回该首字下的全部条目 */
+export function loadSearchShard(query: string) {
+  const ch = query.trim()[0];
+  if (!ch) return Promise.resolve<SearchEntry[]>([]);
+  return get<SearchEntry[]>(`sidx/u${(ch.codePointAt(0) ?? 0).toString(16)}.json`, []);
 }

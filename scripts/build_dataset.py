@@ -166,6 +166,39 @@ def main():
     for k, v in l5.items():
         dump(OUT / "l5" / f"{k}.json", {kk: sorted(vv, key=lambda x: x["code"]) for kk, vv in v.items()})
 
+    # ---- 搜索索引：按名称首字分片，使村级可被直接检索 ----
+    # 条目压缩为 [名称, 代码, 层级]，首字分片后单次只加载一个分片
+    print("生成搜索索引 ...")
+    sidx = OUT / "sidx"
+    sidx.mkdir(parents=True, exist_ok=True)
+
+    def sidx_key(name: str) -> str:
+        ch = name[0] if name else ""
+        return f"u{ord(ch):x}" if ch else "_"
+
+    groups: dict[str, list] = defaultdict(list)
+    for s in all_streets:
+        groups[sidx_key(s["name"])].append([s["name"], s["code"], 4])
+    for v in villages:
+        groups[sidx_key(v["name"])].append([v["name"], v["code"], 5])
+    for k, rows in groups.items():
+        dump(sidx / f"{k}.json", rows)
+
+    # L1–L3 仅约 3 千条，合成单文件常驻
+    top = (
+        [[x["name"], x["code"], 1] for x in provinces]
+        + [[x["name"], x["code"], 2] for x in cities]
+        + [[x["name"], x["code"], 3] for x in all_areas]
+    )
+    dump(sidx / "top.json", top)
+    n_entries = sum(len(r) for r in groups.values()) + len(top)
+    dump(
+        sidx / "_meta.json",
+        {"shards": len(groups), "entries": n_entries, "top": len(top), "format": "[name, code, level]"},
+    )
+    sidx_mb = sum(f.stat().st_size for f in sidx.iterdir()) / 1024 / 1024
+    print(f"  索引 {len(groups)} 个分片 / {n_entries} 条 / {sidx_mb:.1f} MB")
+
     meta = {
         "generatedAt": __import__("time").strftime("%Y-%m-%d %H:%M:%S"),
         "levels": {
@@ -180,6 +213,7 @@ def main():
             "areas": len(legacy_areas),
             "note": "仅为挂载 2023 村级数据而保留的历史层级，非当前建制",
         },
+        "search": {"shards": len(groups), "entries": n_entries},
         "sources": [
             {
                 "name": (mca_meta.get("source") or "中华人民共和国民政部 · 国家地名信息库"),

@@ -48,8 +48,9 @@ data/cache/               村级冻结基线 CSV（50 MB，勿删）
 data/snapshots/           最近 5 次刷新前快照，latest 为上次成功版本
 data/logs/                每次刷新日志
 web/
-  public/data/            分片数据（provinces / l2 / l3 / l4 / l5）
-  components/Explorer.tsx 五级联动浏览
+  public/data/            分片数据（provinces / l2 / l3 / l4 / l5 / sidx）
+  components/Explorer.tsx  五级联动浏览 + 代码定位 + URL 状态同步
+  components/SearchBox.tsx 全局搜索（首字分片索引）
   lib/data.ts             按需加载 + 内存缓存
 ```
 
@@ -110,6 +111,17 @@ PROBE_MAX=3 PROBE_INTERVAL=60 ./scripts/refresh.sh   # 自定义接口探测窗�
 - `l3/{地码}.json` 该地级县级
 - `l4/{前4位}.json` 该片区所有乡级，按县级码分组
 - `l5/{前4位}.json` 该片区所有村级，按乡级码分组
+- `sidx/top.json` L1–L3 全部条目（3,357 条，常驻内存）
+- `sidx/u{首字码点}.json` L4–L5 按名称首字分片（4,338 片 / 67 万条 / 26 MB）
+
+搜索索引让村级可被直接检索：搜「多福巷」只需加载「多」字分片（约 12KB），
+不必下载 49MB 原始数据。索引条目压缩为 `[名称, 代码, 层级]` 三元组。
+
+## 站点功能
+
+- **全局搜索**：顶部搜索框按名称检索五级条目，点击结果自动逐级定位（村级可直达）
+- **代码定位**：输入 6–12 位行政区划代码逐级下钻
+- **URL 状态同步**：选择路径写入 `?code=...`，链接可分享、刷新不丢
 
 ## 已知取舍
 

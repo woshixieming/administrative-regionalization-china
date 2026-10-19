@@ -32,10 +32,14 @@ export interface LevelMeta {
   live: boolean;
 }
 
+/** 搜索索引条目：[名称, 代码, 层级] —— 紧凑数组以压体积 */
+export type SearchEntry = [string, string, number];
+
 export interface Meta {
   generatedAt: string;
   levels: Record<string, LevelMeta>;
   legacy: { streets: number; areas: number; note: string };
+  search?: { shards: number; entries: number };
   sources: Array<{ name: string; url: string; levels: string; asOf: string }>;
 }
 

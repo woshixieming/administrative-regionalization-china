@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   loadAreas,
   loadCities,
@@ -10,6 +10,7 @@ import {
   loadVillages,
 } from "@/lib/data";
 import type { Division, Meta, Village } from "@/lib/types";
+import SearchBox from "./SearchBox";
 
 type Sel = { province?: Division; city?: Division; area?: Division; street?: Division; village?: Village };
 
@@ -88,8 +89,9 @@ export default function Explorer() {
   );
 
   /** 12 位代码逐级定位 */
-  const resolveCode = useCallback(async () => {
-    const raw = codeInput.trim();
+  const locateByCode = useCallback(
+    async (input: string) => {
+    const raw = input.trim();
     setCodeMsg("");
     if (!/^\d{6,12}$/.test(raw)) {
       setCodeMsg("请输入 6–12 位数字行政区划代码");
@@ -115,26 +117,56 @@ export default function Explorer() {
       if (!area) return setCodeMsg("已定位到县级列表，未找到该县级代码");
       await pick("area", area);
 
-      if (raw.length >= 9) {
-        const streetList = (await loadStreets(area.code)) as Division[];
-        const sc = c.slice(0, 9).padEnd(12, "0");
-        const street = streetList.find((x) => x.code === sc);
-        if (!street) return setCodeMsg("已定位到乡级列表，未找到该乡级代码");
-        await pick("street", street);
+        if (raw.length >= 9) {
+          const streetList = (await loadStreets(area.code)) as Division[];
+          const sc = c.slice(0, 9).padEnd(12, "0");
+          const street = streetList.find((x) => x.code === sc);
+          if (!street) return setCodeMsg("已定位到乡级列表，未找到该乡级代码");
+          await pick("street", street);
 
-        if (raw.length === 12) {
-          const vList = await loadVillages(street.code);
-          const v = vList.find((x) => x.code === c);
-          if (v) {
-            setSel((s) => ({ ...s, village: v }));
-            setCodeMsg("已定位到村级");
-          } else setCodeMsg("已定位到乡级，未找到该村级代码");
-        } else setCodeMsg("已定位到乡级");
-      } else setCodeMsg("已定位到县级");
-    } catch {
-      setCodeMsg("定位过程中数据加载失败");
-    }
-  }, [codeInput, provinces, pick]);
+          // 乡级码末 3 位为 000，表示只定位到乡级，不必再找村级
+          if (raw.length === 12 && c.slice(9) !== "000") {
+            const vList = await loadVillages(street.code);
+            const v = vList.find((x) => x.code === c);
+            if (v) {
+              setSel((s) => ({ ...s, village: v }));
+              setCodeMsg("已定位到村级");
+            } else setCodeMsg("已定位到乡级，未找到该村级代码");
+          } else setCodeMsg("已定位到乡级");
+        } else setCodeMsg("已定位到县级");
+      } catch {
+        setCodeMsg("定位过程中数据加载失败");
+      }
+    },
+    [provinces, pick],
+  );
+
+  const resolveCode = useCallback(() => locateByCode(codeInput), [codeInput, locateByCode]);
+
+  // 首次加载后从 URL 恢复选择路径，使链接可分享、刷新不丢
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!provinces.length || restored.current) return;
+    restored.current = true;
+    const c = new URLSearchParams(window.location.search).get("code");
+    if (!c) return;
+    setCodeInput(c);
+    void locateByCode(c);
+  }, [provinces, locateByCode]);
+
+  // 选择路径写回 URL（replaceState，避免在历史里堆大量记录）
+  useEffect(() => {
+    const deepest =
+      sel.village?.code ??
+      sel.street?.code ??
+      sel.area?.code ??
+      sel.city?.code ??
+      sel.province?.code;
+    const url = new URL(window.location.href);
+    if (deepest) url.searchParams.set("code", deepest);
+    else url.searchParams.delete("code");
+    window.history.replaceState(null, "", url.toString());
+  }, [sel]);
 
   const lists: Record<LevelKey, Array<Division | Village>> = {
     province: provinces,
@@ -211,21 +243,30 @@ export default function Explorer() {
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2">
-        <span className="text-[12px] text-stone-500">代码定位</span>
-        <input
-          value={codeInput}
-          onChange={(e) => setCodeInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && resolveCode()}
-          placeholder="输入 6–12 位代码，如 110101001001"
-          className="w-56 rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1 text-[13px] outline-none focus:border-stone-400"
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-stone-200 bg-white px-3 py-2">
+        <SearchBox
+          onPick={(code) => {
+            setCodeInput(code);
+            void locateByCode(code);
+          }}
         />
-        <button
-          onClick={resolveCode}
-          className="rounded-md bg-stone-900 px-3 py-1 text-[12px] text-white hover:bg-stone-700"
-        >
-          定位
-        </button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-stone-500">代码定位</span>
+          <input
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && resolveCode()}
+            placeholder="输入 6–12 位代码"
+            className="w-44 rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1 text-[13px] outline-none placeholder:text-stone-300 focus:border-stone-400"
+          />
+          <button
+            onClick={resolveCode}
+            className="rounded-md bg-stone-900 px-3 py-1 text-[12px] text-white hover:bg-stone-700"
+          >
+            定位
+          </button>
+        </div>
         {codeMsg && <span className="text-[12px] text-stone-500">{codeMsg}</span>}
         <div className="ml-auto flex items-center gap-1.5 text-[12px] text-stone-400">
           <span>当前路径</span>
