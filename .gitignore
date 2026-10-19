@@ -1,0 +1,30 @@
+# 依赖与构建产物
+node_modules/
+.next/
+out/
+web/.next/
+web/out/
+
+# 大型数据产物：均可由脚本重建，不进版本库
+# data/cache 为村级冻结基线 50MB，缺失时 ensure_baseline.py 可从 npm 恢复
+data/cache/
+# 刷新前快照，磁盘上保留最近 5 份
+data/snapshots/
+# 构建暂存目录
+data/staging/
+data/logs/
+# 抓取产物 4MB，可重跑 fetch_mca.py
+data/raw/mca_level1-4.json
+data/raw/mca_level1-4.prev.json
+data/raw/_streets_progress.jsonl
+data/raw/_streets_progress.prev.jsonl
+data/raw/_failed.json
+
+# 分片数据 49MB 构建产物，由 build_dataset.py 重建
+web/public/data/l2/
+web/public/data/l3/
+web/public/data/l4/
+web/public/data/l5/
+
+# 系统
+.DS_Store

@@ -1,0 +1,36 @@
+{
+ "status": "ok",
+ "finishedAt": "20261016-140401",
+ "levels": {
+  "1": {
+   "count": 34,
+   "asOf": "2025-12-31",
+   "live": true
+  },
+  "2": {
+   "count": 337,
+   "asOf": "2025-12-31",
+   "live": true
+  },
+  "3": {
+   "count": 2851,
+   "asOf": "2025-12-31",
+   "live": true
+  },
+  "4": {
+   "count": 39006,
+   "asOf": "2025-12-31",
+   "live": true
+  },
+  "5": {
+   "count": 620572,
+   "asOf": "2023-06-30",
+   "live": false
+  }
+ },
+ "legacy": {
+  "streets": 7203,
+  "areas": 135,
+  "note": "仅为挂载 2023 村级数据而保留的历史层级，非当前建制"
+ }
+}
