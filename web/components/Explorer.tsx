@@ -145,17 +145,23 @@ export default function Explorer() {
 
   // 首次加载后从 URL 恢复选择路径，使链接可分享、刷新不丢
   const restored = useRef(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!provinces.length || restored.current) return;
     restored.current = true;
     const c = new URLSearchParams(window.location.search).get("code");
-    if (!c) return;
+    if (!c) {
+      setReady(true);
+      return;
+    }
     setCodeInput(c);
-    void locateByCode(c);
+    void locateByCode(c).finally(() => setReady(true));
   }, [provinces, locateByCode]);
 
   // 选择路径写回 URL（replaceState，避免在历史里堆大量记录）
+  // 恢复完成前不写 URL，否则首屏会把待恢复的 code 参数清掉
   useEffect(() => {
+    if (!ready) return;
     const deepest =
       sel.village?.code ??
       sel.street?.code ??
@@ -166,7 +172,7 @@ export default function Explorer() {
     if (deepest) url.searchParams.set("code", deepest);
     else url.searchParams.delete("code");
     window.history.replaceState(null, "", url.toString());
-  }, [sel]);
+  }, [sel, ready]);
 
   const lists: Record<LevelKey, Array<Division | Village>> = {
     province: provinces,
