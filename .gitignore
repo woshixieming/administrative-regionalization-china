@@ -30,3 +30,6 @@ web/public/data/sidx/
 
 # 系统
 .DS_Store
+
+# TypeScript 增量构建缓存
+*.tsbuildinfo
