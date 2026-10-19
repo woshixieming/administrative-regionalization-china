@@ -25,6 +25,8 @@ web/public/data/l2/
 web/public/data/l3/
 web/public/data/l4/
 web/public/data/l5/
+# 搜索索引 26MB / 4338 个文件，同样由 build_dataset.py 重建
+web/public/data/sidx/
 
 # 系统
 .DS_Store
