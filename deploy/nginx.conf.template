@@ -1,0 +1,41 @@
+# Managed by china-divisions-explorer
+# Project: __PROJECT_ID__
+server {
+    listen __PORT__;
+    server_name __DOMAIN__;
+    root "__WEB_ROOT__";
+    index index.html;
+    charset utf-8;
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location / {
+        try_files $uri $uri/ =404;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    location /data/v/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location /data/ {
+        try_files $uri =404;
+        add_header Cache-Control "no-cache, max-age=0, must-revalidate" always;
+    }
+
+    location /_next/static/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+
+    error_page 404 /404.html;
+}
