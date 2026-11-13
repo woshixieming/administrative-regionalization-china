@@ -125,7 +125,7 @@ export default function Explorer() {
     <main className="explorer-page">
       <header className="page-header">
         <div className="page-brand">
-          <span className="brand-mark"><Icon name="layers" /></span>
+          <span className="brand-mark" aria-hidden="true">舆图</span>
           <div>
             <h1>中国行政区划</h1>
             <p>省、地、县、乡、村 · 五级数据浏览</p>
