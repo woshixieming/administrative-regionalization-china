@@ -150,6 +150,26 @@ test('恢复选择验证实际父子关系，不能用合法代码拼出错误�
   await assert.rejects(resolveSelection({ province:'410000000000',city:'410000000000',area:'419002000000' }, provinces, false), /历史补层/);
 });
 
+test('兼容远程旧版 code 分享链接，恢复后再迁移为分级参数', async () => {
+  const { load, nodes } = fixture();
+  const provinces = nodes.filter((node) => node.level === 1);
+  const resolve = (url) => load('catalog').locationSelection(new URL(url), provinces, generatedAt);
+  const state = await resolve('http://localhost/?code=419001&history=0&other=yes#browse');
+  assert.equal(state.codes.province, '410000000000');
+  assert.equal(state.codes.city, '410000000000');
+  assert.equal(state.codes.area, '419001000000');
+  assert.equal(state.showLegacy, false);
+  const url = new URL(load('selection').selectionUrl('http://localhost/?code=419001&other=yes#browse', state.codes, false));
+  assert.equal(url.searchParams.has('code'), false);
+  assert.equal(url.searchParams.get('other'), 'yes');
+  assert.equal(url.hash, '#browse');
+  await assert.rejects(resolve('http://localhost/?code=invalid'), /代码无效/);
+  await assert.rejects(resolve('http://localhost/?code=999999'), /未找到/);
+  await assert.rejects(resolve('http://localhost/?code=419999'), /未找到/);
+  const modern = await resolve('http://localhost/?province=410000000000&code=invalid');
+  assert.equal(modern.codes.province, '410000000000');
+});
+
 test('全局搜索可按代码或名称检索，并隐藏历史父层的村级后代', async () => {
   const { load } = fixture();
   const { searchRegions } = load('catalog');

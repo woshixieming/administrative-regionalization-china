@@ -36,6 +36,7 @@ export function readLocation(url: URL): { codes: SelectionCodes; showLegacy: boo
 
 export function selectionUrl(base: string, codes: SelectionCodes, showLegacy: boolean): string {
   const url = new URL(base);
+  url.searchParams.delete("code");
   for (const { key } of LEVELS) {
     url.searchParams.delete(key);
     if (codes[key]) url.searchParams.set(key, codes[key]!);

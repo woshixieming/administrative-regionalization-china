@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dataVersion, loadMeta, loadProvinces } from "@/lib/data";
 import type { Division, Meta, Village, LevelKey, Selection, SelectionCodes } from "@/lib/types";
-import { LEVELS, readLocation, resolveSelection, selectionCodes, selectionPath, selectionUrl } from "@/lib/selection";
-import { catalogPath, lookupCode, pathCodes } from "@/lib/catalog";
+import { LEVELS, resolveSelection, selectionCodes, selectionPath, selectionUrl } from "@/lib/selection";
+import { catalogPath, locationSelection, lookupCode, pathCodes } from "@/lib/catalog";
 import GlobalSearch from "./GlobalSearch";
 import SelectionActions from "./SelectionActions";
 import VersionPanel from "./VersionPanel";
@@ -51,21 +51,24 @@ export default function Explorer() {
   }, [provinces]);
 
   useEffect(() => {
-    if (!provinces.length) return;
-    const restore = () => {
+    if (!provinces.length || !meta) return;
+    const restore = async () => {
+      const ticket = ++navigation.current;
       try {
-        const state = readLocation(new URL(window.location.href));
+        const state = await locationSelection(new URL(window.location.href), provinces, dataVersion(meta));
+        if (ticket !== navigation.current) return;
         void navigate(state.codes, state.showLegacy, "none");
       } catch (err) {
+        if (ticket !== navigation.current) return;
         invalidateNavigation(); setSel({}); setLoading(null);
         setLists({ province: provinces, city: [], area: [], street: [], village: [] });
         setError(err instanceof Error ? err.message : "分享链接无效");
       }
     };
-    restore();
+    void restore();
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
-  }, [provinces, navigate, invalidateNavigation]);
+  }, [meta, provinces, navigate, invalidateNavigation]);
 
   const pick = useCallback(async (level: LevelKey, item: Division | Village) => {
     const index = LEVELS.findIndex((lv) => lv.key === level);

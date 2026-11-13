@@ -105,7 +105,7 @@ class Handler(SimpleHTTPRequestHandler):
             # 旧 out/data 即使仍存在也不可绕过数据库访问；仅开放页面和构建资源。
             if any(part in (".", "..") for part in path.split("/")):
                 raise ApiError(404, "资源不存在")
-            if path not in ("/", "/index.html", "/404.html", "/favicon.ico") and not path.startswith("/_next/"):
+            if path not in ("/", "/index.html", "/404.html", "/favicon.ico", "/icon.svg") and not path.startswith("/_next/"):
                 raise ApiError(404, "资源不存在")
             target = (self.server.static_root / path.lstrip("/")).resolve()
             if not target.is_relative_to(self.server.static_root) or target.is_symlink():

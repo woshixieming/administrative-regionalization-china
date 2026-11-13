@@ -1,6 +1,6 @@
-import { LEVELS } from "./selection";
+import { LEVELS, readLocation } from "./selection";
 import { dataUrl, dataVersion, loadMeta } from "./data";
-import type { IndexRow, RegionNode, SearchManifest, SelectionCodes } from "./types";
+import type { Division, IndexRow, RegionNode, SearchManifest, SelectionCodes } from "./types";
 
 export interface Catalog { rows: RegionNode[]; byKey: Map<string, RegionNode> }
 export interface SearchHit { node: RegionNode; path: RegionNode[] }
@@ -92,6 +92,20 @@ export async function lookupCode(province: string, code: string, version: string
   if (!node && manifest.version === 2 && info.shards?.includes(code.slice(0, 4))) node = (await villages(code.slice(0, 4), version, signal)).find((entry) => entry.code === code);
   return { catalog, node };
 }
+
+export async function locationSelection(url: URL, provinces: Division[], version: string) {
+  const state = readLocation(url);
+  const legacyCode = url.searchParams.get("code");
+  if (Object.keys(state.codes).length || legacyCode === null) return state;
+  if (!/^(?:\d{6}|\d{9}|\d{12})$/.test(legacyCode)) throw new Error("分享链接中的行政区划代码无效");
+  const code = legacyCode.padEnd(12, "0");
+  const province = provinces.find((item) => item.code === code.slice(0, 2).padEnd(12, "0"));
+  if (!province) throw new Error("未找到分享链接中的省级行政区");
+  const { catalog, node } = await lookupCode(province.code, code, version);
+  if (!node) throw new Error("未找到分享链接中的行政区划，数据可能已变更");
+  return { ...state, codes: pathCodes(catalogPath(catalog, node)) };
+}
+
 export async function requestApi<T>(endpoint: string, params: URLSearchParams, signal: AbortSignal): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort();
