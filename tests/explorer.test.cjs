@@ -16,13 +16,45 @@ function modules(fetch) {
     const source = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
-    const context = vm.createContext({ module, exports: module.exports, fetch, URL, AbortController,
+    const context = vm.createContext({ module, exports: module.exports, fetch, URL, URLSearchParams, AbortController,
       DOMException, setTimeout, clearTimeout, console,
       require: (dependency) => load(dependency.replace('./', '')) });
     vm.runInContext(source, context, { filename });
     return module.exports;
   }
   return load;
+}
+
+// 模拟后端响应，前端测试只验证请求契约和返回值处理；SQL 行为由后端集成测试覆盖。
+function apiResponse(url, rows, meta) {
+  const parsed = new URL(url, 'http://localhost');
+  if (!['/api/search', '/api/export'].includes(parsed.pathname)) return null;
+  const params = parsed.searchParams;
+  const catalog = new Map(rows.map(([code,name,level,parentCode,legacy,virtual,extra]) =>
+    [`${level}:${code}`, {code,name,level,parentCode,legacy:!!legacy,virtual:!!virtual,...extra}]));
+  const pathOf = (node) => {
+    const path = [node];
+    while(node.level > 1) { node = catalog.get(`${node.level-1}:${node.parentCode}`); path.unshift(node); }
+    return path;
+  };
+  const visible = [...catalog.values()].filter((node) => params.get('history') !== '0' || !pathOf(node).some((p)=>p.legacy));
+  let body;
+  if(parsed.pathname === '/api/search') {
+    const q = params.get('q').trim().toLowerCase();
+    const hits = visible.filter((n)=>(!params.get('province') || pathOf(n)[0].code===params.get('province')) &&
+      (!Number(params.get('level')) || n.level===Number(params.get('level'))) &&
+      (/^\d+$/.test(q) ? n.code.startsWith(q) : n.name.toLowerCase().includes(q)))
+      .sort((a,b)=>a.code.localeCompare(b.code)||a.level-b.level);
+    body = {hits:hits.slice(0,200).map((node)=>({node,path:pathOf(node)})),total:hits.length,
+      datasetVersion:params.get('version'),generatedAt:meta.generatedAt};
+  } else {
+    const level=Number(params.get('level')), code=params.get('code');
+    const anchor=catalog.get(`${level}:${code}`);
+    const ancestors=new Set(pathOf(anchor).map((n)=>`${n.level}:${n.code}`));
+    const keys=new Set(visible.filter((n)=>ancestors.has(`${n.level}:${n.code}`)||pathOf(n)[level-1]?.code===code).map((n)=>`${n.level}:${n.code}`));
+    body={datasetVersion:params.get('version'),rows:rows.filter((r)=>keys.has(`${r[2]}:${r[0]}`))};
+  }
+  return {ok:true,status:200,json:async()=>body};
 }
 
 const generatedAt = '2026-10-16 14:04:04';
@@ -67,7 +99,9 @@ function fixture() {
   }
   const fetch = async (url, options) => {
     if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
-    const key = decodeURIComponent(String(url).split('?')[0].replace('/data/', ''));
+    const api = apiResponse(url, rows, meta);
+    if (api) return api;
+    const key = decodeURIComponent(String(url).split('?')[0].replace('/api/data/', ''));
     const data = files[key];
     return { ok: data !== undefined, status: data === undefined ? 404 : 200, json: async () => data };
   };
@@ -198,7 +232,9 @@ function versionedFixture() {
   const requests = [];
   const fetch = async (url,options) => {
     if(options?.signal?.aborted) throw new DOMException('aborted','AbortError');
-    const key=decodeURIComponent(String(url).split('?')[0].replace('/data/',''));
+    const api = apiResponse(url, base.rows, meta);
+    if (api) return api;
+    const key=decodeURIComponent(String(url).split('?')[0].replace('/api/data/',''));
     requests.push(key);
     return {ok:files[key]!==undefined,status:files[key]===undefined?404:200,json:async()=>files[key]};
   };
@@ -234,22 +270,20 @@ test('上四级名称搜索不下载村级索引，代码定位只读目标分�
   assert.equal(requests.filter((p)=>p.includes('search/villages/')).join(','),`v/${version}/search/villages/4101.json`);
 });
 
-test('跨省前 200 条结果不受请求完成顺序影响', async () => {
-  function rows(prefix){const p=prefix+'0000000000',c=prefix+'0100000000',a=prefix+'0101000000',s=prefix+'0101001000';return [[p,'省',1,'',0,0],[c,'市',2,p,0,0],[a,'区',3,c,0,0],[s,'街道',4,a,0,0],...Array.from({length:210},(_,i)=>[s.slice(0,9)+String(i+1).padStart(3,'0'),'同名社区',5,s,0,0])];}
-  async function run(fast){
-    const base=fixture();
-    const fetch=async (url)=>{
-      const key=String(url).split('?')[0];
-      if(key.endsWith('meta.json'))return {ok:true,json:async()=>base.meta};
-      if(key.endsWith('manifest.json'))return {ok:true,json:async()=>({version:1,generatedAt,provinces:[{code:'110000000000',name:'A'},{code:'120000000000',name:'B'}]})};
-      const prefix=key.split('/').at(-1).slice(0,2);await new Promise((resolve)=>setTimeout(resolve,prefix===fast?0:15));
-      return {ok:true,json:async()=>rows(prefix)};
-    };
-    return modules(fetch)('catalog').searchRegions('社区','',5,true,new AbortController().signal,()=>{});
-  }
-  const first=await run('11'),second=await run('12');
-  assert.equal(first.total,420);
-  assert.equal(first.hits.map((h)=>h.node.code).join(','),second.hits.map((h)=>h.node.code).join(','));
+test('搜索通过后端接口提交版本和筛选，不下载全国搜索分片', async () => {
+  const base=fixture(), requests=[];
+  const load=modules(async (url, options)=> {
+    if(String(url).endsWith('meta.json')) return {ok:true,json:async()=>base.meta};
+    requests.push(new URL(url,'http://localhost'));
+    return apiResponse(url,base.rows,base.meta);
+  });
+  const result=await load('catalog').searchRegions('社区','410000000000',5,false,new AbortController().signal,()=>{});
+  assert.equal(result.total,1);
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].pathname,'/api/search');
+  assert.equal(requests[0].searchParams.get('history'),'0');
+  assert.equal(requests[0].searchParams.get('version'),generatedAt);
+  assert.equal(requests[0].searchParams.get('province'),'410000000000');
 });
 
 test('沿用旧版和人工修订来源进入导出，不冒充当前官方版本', () => {

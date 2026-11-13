@@ -92,44 +92,31 @@ export async function lookupCode(province: string, code: string, version: string
   if (!node && manifest.version === 2 && info.shards?.includes(code.slice(0, 4))) node = (await villages(code.slice(0, 4), version, signal)).find((entry) => entry.code === code);
   return { catalog, node };
 }
-function compare(a: SearchHit, b: SearchHit) { return a.node.code < b.node.code ? -1 : a.node.code > b.node.code ? 1 : a.node.level - b.node.level; }
+export async function requestApi<T>(endpoint: string, params: URLSearchParams, signal: AbortSignal): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) controller.abort();
+  const timeout = setTimeout(abort, 30000);
+  try {
+    const response = await fetch(`/api/${endpoint}?${params}`, { signal: controller.signal });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error ?? `数据加载失败（HTTP ${response.status}）`);
+    }
+    return await response.json() as T;
+  } catch (error) {
+    if (controller.signal.aborted && !signal.aborted) throw new Error("请求超时，请缩小查询范围后重试", { cause: error });
+    throw error;
+  } finally { clearTimeout(timeout); signal.removeEventListener("abort", abort); }
+}
+
 export async function searchRegions(query: string, province: string, level: number, showLegacy: boolean,
   signal: AbortSignal, onProgress: (done: number, total: number) => void) {
-  const manifest = await loadManifest(signal); const version = dataVersion(manifest);
-  const q = query.trim().toLocaleLowerCase(); const numeric = /^\d+$/.test(q);
-  const targets = manifest.provinces.filter((p) => (!province || p.code === province) && (!numeric || p.code.startsWith(q.slice(0, 2))));
-  if (province && !manifest.provinces.some((p) => p.code === province)) throw new Error("未找到所选省份");
-  const hits: SearchHit[] = []; let total = 0, done = 0, next = 0;
-  function offer(hit: SearchHit) {
-    let lo = 0, hi = hits.length;
-    while (lo < hi) { const mid = (lo + hi) >>> 1; if (compare(hits[mid], hit) < 0) lo = mid + 1; else hi = mid; }
-    if (lo < 200) { hits.splice(lo, 0, hit); if (hits.length > 200) hits.pop(); }
-  }
-  async function scan(rows: RegionNode[], catalog: Catalog) {
-    for (let i = 0; i < rows.length; i++) {
-      if (i % 2048 === 0) { await new Promise((resolve) => setTimeout(resolve, 0)); if (signal.aborted) throw new DOMException("搜索已取消", "AbortError"); }
-      const node = rows[i];
-      if ((level && node.level !== level) || !(numeric ? node.code.startsWith(q) : node.name.toLocaleLowerCase().includes(q))) continue;
-      const path = catalogPath(catalog, node);
-      if (!showLegacy && path.some((parent) => parent.legacy)) continue;
-      total++; offer({ node, path });
-    }
-  }
-  async function worker() {
-    while (next < targets.length) {
-      const p = targets[next++];
-      if (signal.aborted) throw new DOMException("搜索已取消", "AbortError");
-      const catalog = await upperCatalog(p.code, version, manifest.version, signal);
-      await scan(catalog.rows, catalog);
-      if (manifest.version === 2 && (!level || level === 5)) {
-        for (const shard of p.shards ?? []) {
-          if (numeric && q.length >= 4 && !shard.startsWith(q.slice(0, 4))) continue;
-          await scan(await villages(shard, version, signal), catalog);
-        }
-      }
-      onProgress(++done, targets.length);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
-  return { hits, total, generatedAt: manifest.generatedAt, datasetVersion: manifest.datasetVersion };
+  const meta = await loadMeta();
+  const params = new URLSearchParams({ q: query, province, level: String(level), history: showLegacy ? "1" : "0", version: dataVersion(meta) });
+  const result = await requestApi<{ hits: SearchHit[]; total: number; generatedAt: string; datasetVersion: string }>("search", params, signal);
+  if (dataVersion(result) !== dataVersion(meta)) throw new Error("数据版本已更新，请刷新页面后重新搜索");
+  onProgress(1, 1);
+  return result;
 }

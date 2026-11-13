@@ -40,8 +40,8 @@ export default function VersionPanel({ meta, onLocate }: { meta: Meta | null; on
     async function refresh() {
       try {
         const [response, current] = await Promise.all([
-          fetch("/status.json", { cache: "no-store", signal: controller.signal }),
-          fetch("/data/meta.json", { cache: "no-store", signal: controller.signal }),
+          fetch("/api/status", { cache: "no-store", signal: controller.signal }),
+          fetch("/api/data/meta.json", { cache: "no-store", signal: controller.signal }),
         ]);
         if (response.ok) setStatus(await response.json() as Status);
         if (current.ok) setLatest(dataVersion(await current.json() as Meta));

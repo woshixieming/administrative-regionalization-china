@@ -8,7 +8,7 @@ export function dataVersion(meta: { datasetVersion?: string; generatedAt: string
 }
 
 export function dataUrl(path: string, version?: string): string {
-  return `/data/${version && /^[a-f0-9]{24}$/.test(version) ? `v/${version}/` : ""}${path}`;
+  return `/api/data/${version && /^[a-f0-9]{24}$/.test(version) ? `v/${version}/` : ""}${path}`;
 }
 
 async function get<T>(path: string, fallback: T): Promise<T> {
@@ -30,7 +30,7 @@ async function get<T>(path: string, fallback: T): Promise<T> {
 }
 
 export function loadMeta(): Promise<Meta> {
-  if (!metadata) metadata = fetch("/data/meta.json", { cache: "no-store" }).then(async (response) => {
+  if (!metadata) metadata = fetch("/api/data/meta.json", { cache: "no-store" }).then(async (response) => {
     if (!response.ok) throw new Error(`数据版本信息加载失败（HTTP ${response.status}）`);
     const meta = await response.json() as Meta;
     if (!meta.generatedAt || [1, 2, 3, 4, 5].some((level) => !meta.levels[String(level)])) throw new Error("数据版本信息不完整，请刷新站点数据后重试");

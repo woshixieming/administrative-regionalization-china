@@ -1,7 +1,7 @@
-import { catalogPath, loadCatalog, loadManifest } from "./catalog";
+import { catalogPath, createCatalog, loadManifest, requestApi } from "./catalog";
 import { LEVELS, provenance } from "./selection";
 import { dataVersion } from "./data";
-import type { Meta, RegionNode } from "./types";
+import type { IndexRow, Meta, RegionNode } from "./types";
 
 export function exportRow(path: RegionNode[], meta: Meta) {
   const node = path[path.length - 1];
@@ -34,8 +34,12 @@ export async function collectExport(path: RegionNode[], meta: Meta, showLegacy: 
   if (dataVersion(manifest) !== dataVersion(meta)) throw new Error("数据版本已更新，请刷新页面后重新导出");
   const province = manifest.provinces.find((p) => p.code === path[0].code);
   if (!province) throw new Error("所选省份不存在于当前版本，请重新选择");
-  const catalog = await loadCatalog(province.code, dataVersion(meta), signal);
   const anchor = path[path.length - 1];
+  const result = await requestApi<{ datasetVersion: string; rows: IndexRow[] }>("export", new URLSearchParams({
+    version: dataVersion(meta), code: anchor.code, level: String(anchor.level), history: showLegacy ? "1" : "0",
+  }), signal);
+  if (result.datasetVersion !== dataVersion(meta)) throw new Error("数据版本已更新，请刷新页面后重新导出");
+  const catalog = createCatalog(result.rows);
   const rows: ReturnType<typeof exportRow>[] = [];
   for (let i = 0; i < catalog.rows.length; i++) {
     if (i % 1000 === 0) await new Promise((resolve) => setTimeout(resolve, 0));

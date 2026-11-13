@@ -6,9 +6,9 @@
     "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
   "scripts": {
-    "dev": "next dev -p 3100",
+    "dev": "next dev -p 3101",
     "build": "next build",
-    "start": "python3 -m http.server 3100 --bind 127.0.0.1 --directory out",
+    "start": "cd .. && python3 -m backend.server",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit --incremental false",
     "test": "node --test ../tests/explorer.test.cjs",

@@ -20,3 +20,8 @@ data/.empty/
 data/.*lock
 data/deploy.json
 .playwright-cli/
+config/backend.ini
+.venv/
+database/data.sql
+database/data.sql.gz
+dist/
